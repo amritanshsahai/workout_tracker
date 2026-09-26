@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Routine</title>
+<title>Workout Tracker</title>
 <meta name="theme-color" content="#14151A">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -61,19 +61,62 @@
     </div>
   </section>
 
-  <!-- SETTINGS VIEW -->
-  <section class="view" id="view-settings" hidden>
+  <!-- BODY VIEW -->
+  <section class="view" id="view-body" hidden>
     <header class="topbar">
-      <h1>Settings</h1>
+      <h1>Body</h1>
     </header>
     <div class="scroll-area">
-      <div class="settings-row">
-        <span>Weight unit</span>
-        <div class="unit-toggle" id="unit-toggle">
-          <button data-unit="lbs" class="unit-btn">lbs</button>
-          <button data-unit="kg" class="unit-btn">kg</button>
+
+      <div class="body-section">
+        <div class="settings-row">
+          <span>Weight unit</span>
+          <div class="unit-toggle" id="unit-toggle">
+            <button data-unit="lbs" class="unit-btn">lbs</button>
+            <button data-unit="kg" class="unit-btn">kg</button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span>Height unit</span>
+          <div class="unit-toggle" id="height-unit-toggle">
+            <button data-unit="ft_in" class="unit-btn">ft/in</button>
+            <button data-unit="cm" class="unit-btn">cm</button>
+          </div>
         </div>
       </div>
+
+      <div class="body-section">
+        <div class="section-header-row">
+          <h2 class="section-title">Profile</h2>
+          <button class="text-btn" id="btn-edit-profile">Edit</button>
+        </div>
+        <p id="profile-summary" class="profile-summary">Not set up yet.</p>
+      </div>
+
+      <div class="body-section">
+        <h2 class="section-title">Log weight</h2>
+        <div class="log-weight-row">
+          <input type="number" inputmode="decimal" step="0.1" id="quick-weight-input" class="field-input" placeholder="Today's weight">
+          <button class="btn btn-primary" id="btn-log-weight">Log</button>
+        </div>
+        <button class="text-btn" id="btn-add-past-entry">+ Add a past entry</button>
+      </div>
+
+      <div class="body-section" id="stats-card-section" hidden>
+        <h2 class="section-title">Current stats</h2>
+        <div class="stats-card" id="stats-card"></div>
+      </div>
+
+      <div class="body-section" id="trend-section" hidden>
+        <h2 class="section-title">Weight trend</h2>
+        <div id="trend-chart"></div>
+      </div>
+
+      <div class="body-section" id="history-section" hidden>
+        <h2 class="section-title">History</h2>
+        <div id="history-list" class="history-list"></div>
+      </div>
+
       <p class="settings-note">App version 1.0 — all data stays on this device.</p>
     </div>
   </section>
@@ -89,8 +132,8 @@
     <button class="tab-btn" data-view="calendar">
       <span class="tab-icon">▦</span><span>Calendar</span>
     </button>
-    <button class="tab-btn" data-view="settings">
-      <span class="tab-icon">⚙</span><span>Settings</span>
+    <button class="tab-btn" data-view="body">
+      <span class="tab-icon">⚕</span><span>Body</span>
     </button>
   </nav>
 </div>

@@ -1,8 +1,8 @@
 /* ===================== Constants ===================== */
 
 const DB_NAME = "routine-tracker";
-const DB_VERSION = 1;
-const STORES = ["routines", "exercises", "settings", "rotationState", "logs"];
+const DB_VERSION = 2;
+const STORES = ["routines", "exercises", "settings", "rotationState", "logs", "bodyProfile", "weightLogs"];
 
 const DIFFICULTY_TYPES = [
   { id: "weight", label: "Weight" },
@@ -16,6 +16,7 @@ const LOW_DEFAULTS = { weight: 0, reps: 5, time: 15, per_side: 5 };
 const ROUTINE_COLORS = ["#E8B23D", "#4CAF6D", "#5A9BD8", "#C97BD8", "#E0574C", "#63C7C0", "#D8A05A", "#8B8DF0"];
 
 const LBS_PER_KG = 2.2046226218;
+const CM_PER_INCH = 2.54;
 
 /* ===================== Utilities ===================== */
 
@@ -38,6 +39,68 @@ function dateToKey(d) {
 
 function lbsToKg(lbs) { return lbs / LBS_PER_KG; }
 function kgToLbs(kg) { return kg * LBS_PER_KG; }
+function cmToInches(cm) { return cm / CM_PER_INCH; }
+function inchesToCm(inches) { return inches * CM_PER_INCH; }
+
+function cmToFeetInches(cm) {
+  const totalInches = cmToInches(cm);
+  const feet = Math.floor(totalInches / 12);
+  const inches = Math.round(totalInches - feet * 12);
+  return { feet, inches };
+}
+function feetInchesToCm(feet, inches) {
+  return inchesToCm(feet * 12 + inches);
+}
+
+function formatHeight(heightCm, heightUnit) {
+  if (heightCm === null || heightCm === undefined) return "—";
+  if (heightUnit === "cm") return `${Math.round(heightCm)} cm`;
+  const { feet, inches } = cmToFeetInches(heightCm);
+  return `${feet}'${inches}"`;
+}
+
+function calcAge(birthdateStr) {
+  if (!birthdateStr) return null;
+  const birth = new Date(birthdateStr);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function calcBMI(weightLbs, heightCm) {
+  const kg = lbsToKg(weightLbs);
+  const m = heightCm / 100;
+  return kg / (m * m);
+}
+
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return { label: "Underweight", cls: "underweight" };
+  if (bmi < 25) return { label: "Normal", cls: "normal" };
+  if (bmi < 30) return { label: "Overweight", cls: "overweight" };
+  return { label: "Obese", cls: "obese" };
+}
+
+function calcBMR(weightLbs, heightCm, age, gender) {
+  const kg = lbsToKg(weightLbs);
+  const base = 10 * kg + 6.25 * heightCm - 5 * age;
+  return gender === "male" ? base + 5 : base - 161;
+}
+
+function calcIdealWeightKg(heightCm, gender) {
+  const totalInches = cmToInches(heightCm);
+  const over60 = Math.max(0, totalInches - 60);
+  const base = gender === "male" ? 50 : 45.5;
+  return base + 2.3 * over60;
+}
+
+function calcHealthyRangeLbs(heightCm) {
+  const m = heightCm / 100;
+  const lowKg = 18.5 * m * m;
+  const highKg = 24.9 * m * m;
+  return [kgToLbs(lowKg), kgToLbs(highKg)];
+}
 
 /* Weight is always stored canonically in lbs. Convert only for display. */
 function displayWeight(lbsValue, unit) {
@@ -73,6 +136,8 @@ function openDb() {
       if (!db.objectStoreNames.contains("settings")) db.createObjectStore("settings", { keyPath: "key" });
       if (!db.objectStoreNames.contains("rotationState")) db.createObjectStore("rotationState", { keyPath: "key" });
       if (!db.objectStoreNames.contains("logs")) db.createObjectStore("logs", { keyPath: "date" });
+      if (!db.objectStoreNames.contains("bodyProfile")) db.createObjectStore("bodyProfile", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("weightLogs")) db.createObjectStore("weightLogs", { keyPath: "date" });
     };
     req.onsuccess = (e) => resolve(e.target.result);
     req.onerror = (e) => reject(e.target.error);
@@ -193,7 +258,7 @@ async function seedIfEmpty() {
     routineOrder++;
   }
 
-  await dbPut("settings", { key: "app", unit: "lbs" });
+  await dbPut("settings", { key: "app", unit: "lbs", heightUnit: "ft_in" });
   await dbPut("rotationState", { key: "state", currentRoutineId: null, lastAction: null });
 }
 
@@ -202,28 +267,36 @@ async function seedIfEmpty() {
 const state = {
   routines: [],
   exercises: [],
-  settings: { unit: "lbs" },
+  settings: { unit: "lbs", heightUnit: "ft_in" },
   rotation: { currentRoutineId: null, lastAction: null },
   logs: {}, // date -> routineId
   calendarCursor: new Date(), // month being viewed
   calendarEditMode: false,
   manageSelectedRoutineId: null,
+  bodyProfile: null, // { heightCm, gender, birthdate }
+  weightLogs: {}, // date -> weightLbs
 };
 
 async function loadAllData() {
-  const [routines, exercises, settingsRow, rotationRow, logRows] = await Promise.all([
+  const [routines, exercises, settingsRow, rotationRow, logRows, bodyProfileRow, weightLogRows] = await Promise.all([
     dbGetAll("routines"),
     dbGetAll("exercises"),
     dbGet("settings", "app"),
     dbGet("rotationState", "state"),
     dbGetAll("logs"),
+    dbGet("bodyProfile", "profile"),
+    dbGetAll("weightLogs"),
   ]);
   state.routines = routines.sort((a, b) => a.order - b.order);
   state.exercises = exercises;
-  state.settings = settingsRow || { key: "app", unit: "lbs" };
+  state.settings = settingsRow || { key: "app", unit: "lbs", heightUnit: "ft_in" };
+  if (state.settings.heightUnit === undefined) state.settings.heightUnit = "ft_in";
   state.rotation = rotationRow || { key: "state", currentRoutineId: null, lastAction: null };
   state.logs = {};
   for (const row of logRows) state.logs[row.date] = row.routineId;
+  state.bodyProfile = bodyProfileRow || null;
+  state.weightLogs = {};
+  for (const row of weightLogRows) state.weightLogs[row.date] = row.weightLbs;
 
   // If no current routine set yet, default to first routine.
   if (!state.rotation.currentRoutineId && state.routines.length > 0) {
@@ -568,7 +641,7 @@ document.getElementById("btn-undo").addEventListener("click", () => {
 
 /* ===================== Tab navigation ===================== */
 
-const VIEWS = ["home", "manage", "calendar", "settings"];
+const VIEWS = ["home", "manage", "calendar", "body"];
 
 function switchView(viewName) {
   VIEWS.forEach((v) => {
@@ -580,7 +653,7 @@ function switchView(viewName) {
   if (viewName === "home") renderHome();
   if (viewName === "manage") { state.manageSelectedRoutineId = null; renderManage(); }
   if (viewName === "calendar") renderCalendar();
-  if (viewName === "settings") renderSettings();
+  if (viewName === "body") renderBody();
 }
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -1017,13 +1090,164 @@ document.getElementById("btn-cal-done").addEventListener("click", () => {
   renderCalendar();
 });
 
-/* ===================== Settings rendering ===================== */
+/* ===================== Body tab rendering ===================== */
 
-function renderSettings() {
-  document.querySelectorAll(".unit-btn").forEach((btn) => {
+function getSortedWeightEntries() {
+  return Object.entries(state.weightLogs)
+    .map(([date, weightLbs]) => ({ date, weightLbs }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function getLatestWeightEntry() {
+  const entries = getSortedWeightEntries();
+  return entries.length > 0 ? entries[entries.length - 1] : null;
+}
+
+function renderBody() {
+  // Unit toggle buttons
+  document.querySelectorAll("#unit-toggle .unit-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.unit === state.settings.unit);
   });
+  document.querySelectorAll("#height-unit-toggle .unit-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.unit === state.settings.heightUnit);
+  });
+
+  // Profile summary
+  const profileEl = document.getElementById("profile-summary");
+  const p = state.bodyProfile;
+  if (!p || !p.heightCm || !p.gender || !p.birthdate) {
+    profileEl.textContent = "Not set up yet — tap Edit to add your height, gender, and birthdate.";
+  } else {
+    const age = calcAge(p.birthdate);
+    const genderLabel = p.gender === "male" ? "Male" : "Female";
+    profileEl.textContent = `${formatHeight(p.heightCm, state.settings.heightUnit)} · ${genderLabel} · Age ${age}`;
+  }
+
+  renderStatsCard();
+  renderTrendChart();
+  renderHistoryList();
 }
+
+function renderStatsCard() {
+  const section = document.getElementById("stats-card-section");
+  const card = document.getElementById("stats-card");
+  const p = state.bodyProfile;
+  const latest = getLatestWeightEntry();
+
+  if (!p || !p.heightCm || !p.gender || !p.birthdate || !latest) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const bmi = calcBMI(latest.weightLbs, p.heightCm);
+  const cat = bmiCategory(bmi);
+  const age = calcAge(p.birthdate);
+  const bmr = calcBMR(latest.weightLbs, p.heightCm, age, p.gender);
+  const idealKg = calcIdealWeightKg(p.heightCm, p.gender);
+  const idealLbs = kgToLbs(idealKg);
+  const [rangeLowLbs, rangeHighLbs] = calcHealthyRangeLbs(p.heightCm);
+
+  const unit = state.settings.unit;
+  const fmtWeight = (lbsVal) => `${displayWeight(lbsVal, unit)} ${unit}`;
+
+  card.innerHTML = `
+    <div class="stat-row">
+      <span class="stat-label">BMI</span>
+      <span class="bmi-badge ${cat.cls}">${bmi.toFixed(1)} · ${cat.label}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">BMR (calories/day at rest)</span>
+      <span class="stat-value">${Math.round(bmr)}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Ideal weight</span>
+      <span class="stat-value">${fmtWeight(idealLbs)}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Healthy range</span>
+      <span class="stat-value">${fmtWeight(rangeLowLbs)} – ${fmtWeight(rangeHighLbs)}</span>
+    </div>
+  `;
+}
+
+function renderTrendChart() {
+  const section = document.getElementById("trend-section");
+  const container = document.getElementById("trend-chart");
+  const entries = getSortedWeightEntries();
+
+  if (entries.length < 2) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const unit = state.settings.unit;
+  const values = entries.map((e) => displayWeight(e.weightLbs, unit));
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+
+  const w = 340, h = 140, padX = 8, padY = 16;
+  const stepX = (w - padX * 2) / (entries.length - 1);
+
+  const points = values.map((v, i) => {
+    const x = padX + i * stepX;
+    const y = padY + (1 - (v - minV) / range) * (h - padY * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const pathD = "M" + points.join(" L");
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+      <polyline points="${points.join(" ")}" fill="none" stroke="#E8B23D" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${points.map((pt) => {
+        const [x, y] = pt.split(",");
+        return `<circle cx="${x}" cy="${y}" r="3" fill="#E8B23D"/>`;
+      }).join("")}
+    </svg>
+    <div style="display:flex;justify-content:space-between;color:var(--text-dim);font-size:12px;margin-top:4px;">
+      <span>${entries[0].date}</span>
+      <span>${entries[entries.length - 1].date}</span>
+    </div>
+  `;
+}
+
+function renderHistoryList() {
+  const section = document.getElementById("history-section");
+  const listEl = document.getElementById("history-list");
+  const entries = getSortedWeightEntries().slice().reverse();
+
+  if (entries.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const unit = state.settings.unit;
+  const p = state.bodyProfile;
+
+  listEl.innerHTML = entries.map((e) => {
+    let bmiText = "";
+    if (p && p.heightCm) {
+      const bmi = calcBMI(e.weightLbs, p.heightCm);
+      bmiText = ` · BMI ${bmi.toFixed(1)}`;
+    }
+    return `
+      <div class="history-row" data-date="${e.date}">
+        <span class="history-date">${e.date}</span>
+        <span class="history-meta">${displayWeight(e.weightLbs, unit)} ${unit}${bmiText}</span>
+      </div>
+    `;
+  }).join("");
+
+  document.querySelectorAll(".history-row").forEach((row) => {
+    row.addEventListener("click", () => openWeightEntryEditor(row.dataset.date));
+  });
+}
+
+/* ---- Unit toggles ---- */
 
 document.getElementById("unit-toggle").addEventListener("click", async (e) => {
   const btn = e.target.closest(".unit-btn");
@@ -1031,9 +1255,165 @@ document.getElementById("unit-toggle").addEventListener("click", async (e) => {
   state.settings.unit = btn.dataset.unit;
   state.settings.key = "app";
   await dbPut("settings", state.settings);
-  renderSettings();
-  renderHome();
+  renderBody();
 });
+
+document.getElementById("height-unit-toggle").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".unit-btn");
+  if (!btn) return;
+  state.settings.heightUnit = btn.dataset.unit;
+  state.settings.key = "app";
+  await dbPut("settings", state.settings);
+  renderBody();
+});
+
+/* ---- Profile editor ---- */
+
+document.getElementById("btn-edit-profile").addEventListener("click", () => {
+  openProfileEditor();
+});
+
+function openProfileEditor() {
+  const p = state.bodyProfile || {};
+  const heightUnit = state.settings.heightUnit;
+  let heightFieldsHtml;
+  if (heightUnit === "cm") {
+    const cmVal = p.heightCm ? Math.round(p.heightCm) : "";
+    heightFieldsHtml = `
+      <div class="field-group">
+        <label class="field-label">Height (cm)</label>
+        <input class="field-input" type="number" inputmode="numeric" id="profile-height-cm" value="${cmVal}" placeholder="e.g. 178">
+      </div>
+    `;
+  } else {
+    const { feet, inches } = p.heightCm ? cmToFeetInches(p.heightCm) : { feet: "", inches: "" };
+    heightFieldsHtml = `
+      <div class="field-group">
+        <label class="field-label">Height</label>
+        <div style="display:flex;gap:10px;">
+          <input class="field-input" type="number" inputmode="numeric" id="profile-height-ft" value="${feet}" placeholder="ft" style="flex:1;">
+          <input class="field-input" type="number" inputmode="numeric" id="profile-height-in" value="${inches}" placeholder="in" style="flex:1;">
+        </div>
+      </div>
+    `;
+  }
+
+  openModal(`
+    <h2 class="modal-title">Body profile</h2>
+    ${heightFieldsHtml}
+    <div class="field-group">
+      <label class="field-label">Gender</label>
+      <select class="field-select" id="profile-gender">
+        <option value="male" ${p.gender === "male" ? "selected" : ""}>Male</option>
+        <option value="female" ${p.gender === "female" ? "selected" : ""}>Female</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Birthdate</label>
+      <input class="field-input" type="date" id="profile-birthdate" value="${p.birthdate || ""}" max="${todayKey()}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="profile-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="profile-save-btn">Save</button>
+    </div>
+  `, () => {
+    document.getElementById("profile-cancel-btn").addEventListener("click", closeModal);
+    document.getElementById("profile-save-btn").addEventListener("click", async () => {
+      let heightCm;
+      if (heightUnit === "cm") {
+        const v = parseFloat(document.getElementById("profile-height-cm").value);
+        if (!v || v <= 0) return;
+        heightCm = v;
+      } else {
+        const ft = parseFloat(document.getElementById("profile-height-ft").value) || 0;
+        const inch = parseFloat(document.getElementById("profile-height-in").value) || 0;
+        if (ft <= 0 && inch <= 0) return;
+        heightCm = feetInchesToCm(ft, inch);
+      }
+      const gender = document.getElementById("profile-gender").value;
+      const birthdate = document.getElementById("profile-birthdate").value;
+      if (!birthdate) return;
+
+      state.bodyProfile = { key: "profile", heightCm, gender, birthdate };
+      await dbPut("bodyProfile", state.bodyProfile);
+      closeModal();
+      renderBody();
+    });
+  });
+}
+
+/* ---- Weight logging ---- */
+
+document.getElementById("btn-log-weight").addEventListener("click", async () => {
+  const input = document.getElementById("quick-weight-input");
+  const val = parseFloat(input.value);
+  if (!val || val <= 0) return;
+  const unit = state.settings.unit;
+  const weightLbs = unit === "kg" ? kgToLbs(val) : val;
+  const today = todayKey();
+  state.weightLogs[today] = weightLbs;
+  await dbPut("weightLogs", { date: today, weightLbs });
+  input.value = "";
+  renderBody();
+});
+
+document.getElementById("btn-add-past-entry").addEventListener("click", () => {
+  openWeightEntryEditor(null);
+});
+
+function openWeightEntryEditor(existingDate) {
+  const unit = state.settings.unit;
+  const isEdit = !!existingDate;
+  const existingLbs = isEdit ? state.weightLogs[existingDate] : null;
+  const existingDisplay = existingLbs ? displayWeight(existingLbs, unit) : "";
+
+  openModal(`
+    <h2 class="modal-title">${isEdit ? "Edit entry" : "Add a past entry"}</h2>
+    <div class="field-group">
+      <label class="field-label">Date</label>
+      <input class="field-input" type="date" id="weight-entry-date" value="${existingDate || todayKey()}" max="${todayKey()}">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Weight (${unit})</label>
+      <input class="field-input" type="number" inputmode="decimal" step="0.1" id="weight-entry-value" value="${existingDisplay}" placeholder="e.g. 165">
+    </div>
+    <div class="modal-actions">
+      ${isEdit ? '<button class="btn btn-danger" id="weight-entry-delete">Delete</button>' : '<button class="btn btn-secondary" id="weight-entry-cancel">Cancel</button>'}
+      <button class="btn btn-primary" id="weight-entry-save">Save</button>
+    </div>
+  `, () => {
+    const cancelBtn = document.getElementById("weight-entry-cancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+
+    const deleteBtn = document.getElementById("weight-entry-delete");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        delete state.weightLogs[existingDate];
+        await dbDelete("weightLogs", existingDate);
+        closeModal();
+        renderBody();
+      });
+    }
+
+    document.getElementById("weight-entry-save").addEventListener("click", async () => {
+      const date = document.getElementById("weight-entry-date").value;
+      const val = parseFloat(document.getElementById("weight-entry-value").value);
+      if (!date || !val || val <= 0) return;
+      const weightLbs = unit === "kg" ? kgToLbs(val) : val;
+
+      // If editing and the date changed, remove the old entry first.
+      if (isEdit && date !== existingDate) {
+        delete state.weightLogs[existingDate];
+        await dbDelete("weightLogs", existingDate);
+      }
+
+      state.weightLogs[date] = weightLbs;
+      await dbPut("weightLogs", { date, weightLbs });
+      closeModal();
+      renderBody();
+    });
+  });
+}
 
 /* ===================== Service worker registration ===================== */
 

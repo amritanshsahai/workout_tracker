@@ -1,6 +1,28 @@
 # Routine Tracker — Setup Instructions
 
-## 1. Upload these files to your GitHub repository
+## Already installed? Updating with the new Body tab
+
+You've already set this up once. To get the new Body/BMI feature and the "Workout Tracker" rename:
+
+1. Go to your repo: https://github.com/amritanshsahai/workout_tracker
+2. Click **Add file → Upload files**
+3. Drag in these **updated** files (they'll overwrite the old versions): `index.html`, `styles.css`, `app.js`, `manifest.json`, `sw.js`
+4. Click **Commit changes** — GitHub Pages updates automatically within a minute or two
+5. On your phone, just reopen the already-installed app. It'll pick up the new version automatically in the background (the service worker fetches the update next time you're online) — no need to reinstall.
+6. Note: the home screen icon will still say "Routine" until you uninstall and reinstall it, since Android bakes the name in at install time (see below if you want the new name to show).
+
+If you want the new "Workout Tracker" name to actually show on your home screen icon:
+1. Long-press the current icon → Uninstall/Remove
+2. Re-open the site URL in Chrome
+3. Tap **Install app** again
+
+Your data (routines, exercises, logs, and now body stats) is untouched either way — it lives in the browser's storage for that site, not in the icon itself.
+
+---
+
+## First-time setup (if you're starting fresh)
+
+### 1. Upload these files to your GitHub repository
 
 Go to: https://github.com/amritanshsahai/workout_tracker
 
@@ -16,7 +38,7 @@ Click **Add file → Upload files**, then drag in all of these files (all at onc
 
 Scroll down and click **Commit changes**.
 
-## 2. Turn on GitHub Pages
+### 2. Turn on GitHub Pages
 
 1. In your repository, click **Settings** (top menu).
 2. In the left sidebar, click **Pages**.
@@ -25,7 +47,7 @@ Scroll down and click **Commit changes**.
 5. Click **Save**.
 6. Wait about 1–2 minutes. Refresh the Pages settings page — it will show a message like "Your site is live at `https://amritanshsahai.github.io/workout_tracker/`".
 
-## 3. Install it on your OnePlus 7T
+### 3. Install it on your OnePlus 7T
 
 1. Open that URL in **Chrome** on your phone.
 2. Tap the **⋮** menu (top right) → **Install app** (or **Add to Home screen**).

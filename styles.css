@@ -338,6 +338,129 @@ html { scroll-padding-top: var(--safe-top); }
   margin-top: 20px;
 }
 
+/* ---------- Body tab ---------- */
+
+.body-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.body-section:last-of-type { border-bottom: none; }
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.profile-summary {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.log-weight-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.log-weight-row .field-input { flex: 1; }
+.log-weight-row .btn { flex-shrink: 0; padding: 12px 20px; }
+
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.bmi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.bmi-badge.underweight { background: rgba(90,155,216,0.18); color: #5A9BD8; }
+.bmi-badge.normal { background: rgba(76,175,109,0.18); color: var(--success); }
+.bmi-badge.overweight { background: rgba(232,178,61,0.18); color: var(--accent); }
+.bmi-badge.obese { background: rgba(224,87,76,0.18); color: var(--danger); }
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.history-date {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.history-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.empty-note {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+#trend-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 /* ---------- Tab bar ---------- */
 
 .tabbar {

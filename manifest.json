@@ -1,6 +1,6 @@
 {
-  "name": "Routine Tracker",
-  "short_name": "Routine",
+  "name": "Workout Tracker",
+  "short_name": "Workout",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
